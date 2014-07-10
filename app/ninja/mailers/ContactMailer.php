@@ -14,9 +14,10 @@ class ContactMailer extends Mailer {
 	public function sendInvoice(Invoice $invoice)
 	{
 		$invoice->load('invitations', 'client', 'account');
+		$entityType = $invoice->getEntityType();
 
 		$view = 'invoice';
-		$subject = trans('texts.invoice_subject', ['invoice' => $invoice->invoice_number, 'account' => $invoice->account->getDisplayName()]);
+		$subject = trans("texts.{$entityType}_subject", ['invoice' => $invoice->invoice_number, 'account' => $invoice->account->getDisplayName()]);
 
 		foreach ($invoice->invitations as $invitation)
 		{
@@ -29,12 +30,14 @@ class ContactMailer extends Mailer {
 			$invitation->save();
 	
 			$data = [
+				'entityType' => $entityType,
 				'link' => $invitation->getLink(),
 				'clientName' => $invoice->client->getDisplayName(),
 				'accountName' => $invoice->account->getDisplayName(),
 				'contactName'	=> $invitation->contact->getDisplayName(),
 				'invoiceAmount' => Utils::formatMoney($invoice->amount, $invoice->client->currency_id),
-				'emailFooter' => $invoice->account->email_footer
+				'emailFooter' => $invoice->account->email_footer,
+				'showNinjaFooter' => !$invoice->account->isPro() || !Utils::isNinjaProd()
 			];
 
 			$fromEmail = $invitation->user->email;
@@ -63,7 +66,8 @@ class ContactMailer extends Mailer {
 			'accountName' => $payment->account->getDisplayName(),
 			'clientName' => $payment->client->getDisplayName(),
 			'emailFooter' => $payment->account->email_footer,
-			'paymentAmount' => Utils::formatMoney($payment->amount, $payment->client->currency_id)
+			'paymentAmount' => Utils::formatMoney($payment->amount, $payment->client->currency_id),
+			'showNinjaFooter' => !$payment->account->isPro() || !Utils::isNinjaProd()			
 		];
 
 		$user = $payment->invitation->user;

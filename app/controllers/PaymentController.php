@@ -1,23 +1,25 @@
 <?php
 
 use ninja\repositories\PaymentRepository;
+use ninja\repositories\InvoiceRepository;
 
 class PaymentController extends \BaseController 
 {
     protected $creditRepo;
 
-    public function __construct(PaymentRepository $paymentRepo)
+    public function __construct(PaymentRepository $paymentRepo, InvoiceRepository $invoiceRepo)
     {
         parent::__construct();
 
         $this->paymentRepo = $paymentRepo;
+        $this->invoiceRepo = $invoiceRepo;
     }   
 
 	public function index()
 	{
         return View::make('list', array(
             'entityType'=>ENTITY_PAYMENT, 
-            'title' => '- Payments',
+            'title' => trans('texts.payments'),
             'columns'=>Utils::trans(['checkbox', 'invoice', 'client', 'transaction_reference', 'method', 'payment_amount', 'payment_date', 'action'])
         ));
 	}
@@ -38,7 +40,7 @@ class PaymentController extends \BaseController
         }        
 
         $table->addColumn('transaction_reference', function($model) { return $model->transaction_reference ? $model->transaction_reference : '<i>Manual entry</i>'; })
-              ->addColumn('payment_type', function($model) { return $model->payment_type ? $model->payment_type : ($model->transaction_reference ? '<i>Online payment</i>' : ''); });
+              ->addColumn('payment_type', function($model) { return $model->payment_type ? $model->payment_type : ($model->account_gateway_id ? '<i>Online payment</i>' : ''); });
 
         return $table->addColumn('amount', function($model) { return Utils::formatMoney($model->amount, $model->currency_id); })
     	    ->addColumn('payment_date', function($model) { return Utils::dateToString($model->payment_date); })
@@ -64,11 +66,12 @@ class PaymentController extends \BaseController
             'clientPublicId' => Input::old('client') ? Input::old('client') : $clientPublicId,
             'invoicePublicId' => Input::old('invoice') ? Input::old('invoice') : $invoicePublicId,
             'invoice' => null,
-            'invoices' => Invoice::scope()->with('client', 'invoice_status')->orderBy('invoice_number')->get(),
+            'invoices' => Invoice::scope()->where('is_recurring', '=', false)->where('is_quote', '=', false)
+                            ->with('client', 'invoice_status')->orderBy('invoice_number')->get(),
             'payment' => null, 
             'method' => 'POST', 
             'url' => "payments", 
-            'title' => '- New Payment',
+            'title' => trans('texts.new_payment'),
             //'currencies' => Currency::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
             'paymentTypes' => PaymentType::remember(DEFAULT_QUERY_CACHE)->orderBy('id')->get(),
             'clients' => Client::scope()->with('contacts')->orderBy('name')->get());
@@ -84,11 +87,12 @@ class PaymentController extends \BaseController
         $data = array(
             'client' => null,
             'invoice' => null,
-            'invoices' => Invoice::scope()->with('client', 'invoice_status')->orderBy('invoice_number')->get(array('public_id','invoice_number')),
+            'invoices' => Invoice::scope()->where('is_recurring', '=', false)->where('is_quote', '=', false)
+                            ->with('client', 'invoice_status')->orderBy('invoice_number')->get(),
             'payment' => $payment, 
             'method' => 'PUT', 
             'url' => 'payments/' . $publicId, 
-            'title' => '- Edit Payment',
+            'title' => 'Edit Payment',
             //'currencies' => Currency::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
             'paymentTypes' => PaymentType::remember(DEFAULT_QUERY_CACHE)->orderBy('id')->get(),
             'clients' => Client::scope()->with('contacts')->orderBy('name')->get());
@@ -101,7 +105,7 @@ class PaymentController extends \BaseController
         $config = json_decode($accountGateway->config);
         
         /*
-        $gateway->setSolutionType ("Sole");
+        $gateway->setSolutionType("Sole");
         $gateway->setLandingPage("Billing");
         */
         
@@ -122,7 +126,7 @@ class PaymentController extends \BaseController
             $gateway->setTestMode(true);   
         }        
         */
-        
+
         return $gateway;        
     }
 
@@ -224,7 +228,7 @@ class PaymentController extends \BaseController
 			return $data;
 		}
     }
-
+    
     public function show_payment($invitationKey)
     {
         // For PayPal Express we redirect straight to their site
@@ -242,23 +246,26 @@ class PaymentController extends \BaseController
             {
                 return self::do_payment($invitationKey, false);
             }            
-        }
-
+        }  
+                
         $invitation = Invitation::with('invoice.invoice_items', 'invoice.client.currency', 'invoice.client.account.account_gateways.gateway')->where('invitation_key', '=', $invitationKey)->firstOrFail();
         $invoice = $invitation->invoice;         
-        $client = $invoice->client;    
+        $client = $invoice->client;
+        $accountGateway = $invoice->client->account->account_gateways[0];    
         $gateway = $invoice->client->account->account_gateways[0]->gateway;
         $paymentLibrary = $gateway->paymentlibrary;
+        $acceptedCreditCardTypes = $accountGateway->getCreditcardTypes();
 
         $data = [
             'showBreadcrumbs' => false,
-            'hideHeader' => true,
+            'hideHeader' => $client->account->isPro() && Utils::isNinjaProd(),
             'invitationKey' => $invitationKey,
             'invoice' => $invoice,
             'client' => $client,
             'contact' => $invitation->contact,
-            'paymentLibrary' => $paymentLibrary ,
-            'gateway' => $gateway,     
+            'paymentLibrary' => $paymentLibrary,
+            'gateway' => $gateway,
+            'acceptedCreditCardTypes' => $acceptedCreditCardTypes,     
 			'countries' => Country::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),     
         ];
 
@@ -307,7 +314,6 @@ class PaymentController extends \BaseController
             $client->save();
         }
 		
-
         try
         {
         	if($paymentLibrary->id == PAYMENT_LIBRARY_OMNIPAY)
@@ -327,12 +333,7 @@ class PaymentController extends \BaseController
 	            if ($response->isSuccessful())
 	            {
 	                $payment = self::createPayment($invitation, $ref);
-	
-	                $invoice->invoice_status_id = INVOICE_STATUS_PAID;
-	                $invoice->save();
-	
-	                Event::fire('invoice.paid', $payment);
-	
+		
 	                Session::flash('message', trans('texts.applied_payment'));  
 	                return Redirect::to('view/' . $payment->invitation->invitation_key);                                    
 	            }
@@ -380,12 +381,7 @@ class PaymentController extends \BaseController
 	            if (strtolower($response->status) == 'success')
 	            {
 	                $payment = self::createPayment($invitation, $response->response_message);
-	
-	                $invoice->invoice_status_id = INVOICE_STATUS_PAID;
-	                $invoice->save();
-	
-	                Event::fire('invoice.paid', $payment);
-	
+		
 	                Session::flash('message', trans('texts.applied_payment'));  
 	                return Redirect::to('view/' . $payment->invitation->invitation_key);                                    
 	            }
@@ -410,7 +406,19 @@ class PaymentController extends \BaseController
     {
         $invoice = $invitation->invoice;
         $accountGateway = $invoice->client->account->account_gateways[0];
-            
+
+        if ($invoice->account->account_key == NINJA_ACCOUNT_KEY)
+        {
+            $account = Account::find($invoice->client->public_id);
+            $account->pro_plan_paid = date_create()->format('Y-m-d');
+            $account->save();
+        }
+        
+        if ($invoice->is_quote)
+        {
+            $invoice = $this->invoiceRepo->cloneInvoice($invoice, $invoice->id);
+        }
+        
         $payment = Payment::createNew($invitation);
         $payment->invitation_id = $invitation->id;
         $payment->account_gateway_id = $accountGateway->id;
@@ -420,21 +428,16 @@ class PaymentController extends \BaseController
         $payment->contact_id = $invitation->contact_id;
         $payment->transaction_reference = $ref;
         $payment->payment_date = date_create()->format('Y-m-d');
-
+        
         if ($payerId)
         {
             $payment->payer_id = $payerId;                
         }
-
+        
         $payment->save();
-
-        if ($invoice->account->account_key == NINJA_ACCOUNT_KEY)
-        {
-            $account = Account::find($invoice->client->public_id);
-            $account->pro_plan_paid = date_create()->format('Y-m-d');
-            $account->save();
-        }
-
+        
+        Event::fire('invoice.paid', $payment);
+        
         return $payment;
     }
 
@@ -457,12 +460,7 @@ class PaymentController extends \BaseController
 
             if ($response->isSuccessful())
             {
-                $payment = self::createPayment($invitation, $ref, $payerId);
-                
-                $invoice->invoice_status_id = INVOICE_STATUS_PAID;
-                $invoice->save();
-                
-                Event::fire('invoice.paid', $payment);
+                $payment = self::createPayment($invitation, $ref, $payerId);                
 
                 Session::flash('message', trans('texts.applied_payment'));  
                 return Redirect::to('view/' . $invitation->invitation_key);                

@@ -3,7 +3,9 @@
 
 @section('head')
 <meta name="csrf-token" content="<?= csrf_token() ?>">
+<link href="{{ asset('built.css') }}" rel="stylesheet" type="text/css"/>    
 
+<!--
 <script src="{{ asset('vendor/jquery-ui/ui/minified/jquery-ui.min.js') }}" type="text/javascript"></script>				
 <script src="{{ asset('vendor/bootstrap/dist/js/bootstrap.min.js') }}" type="text/javascript"></script>				
 <script src="{{ asset('vendor/datatables/media/js/jquery.dataTables.js') }}" type="text/javascript"></script>
@@ -14,21 +16,25 @@
 <script src="{{ asset('vendor/underscore/underscore.js') }}" type="text/javascript"></script>		
 <script src="{{ asset('vendor/bootstrap-datepicker/js/bootstrap-datepicker.js') }}" type="text/javascript"></script>		
 <script src="{{ asset('vendor/typeahead.js/dist/typeahead.min.js') }}" type="text/javascript"></script>	
-<script src="{{ asset('vendor/accounting/accounting.min.js') }}" type="text/javascript"></script>		
+<script src="{{ asset('vendor/accounting/accounting.min.js') }}" type="text/javascript"></script>   
+<script src="{{ asset('vendor/spectrum/spectrum.js') }}" type="text/javascript"></script>   
 <script src="{{ asset('js/bootstrap-combobox.js') }}" type="text/javascript"></script>		
 <script src="{{ asset('js/jspdf.source.js') }}" type="text/javascript"></script>		
 <script src="{{ asset('js/jspdf.plugin.split_text_to_size.js') }}" type="text/javascript"></script>   
 <script src="{{ asset('js/script.js') }}" type="text/javascript"></script>		
+-->
 
+<!--
 <link href="{{ asset('vendor/bootstrap/dist/css/bootstrap.min.css') }}" rel="stylesheet" type="text/css"/> 
 <link href="{{ asset('vendor/datatables/media/css/jquery.dataTables.css') }}" rel="stylesheet" type="text/css">
 <link href="{{ asset('vendor/datatables-bootstrap3/BS3/assets/css/datatables.css') }}" rel="stylesheet" type="text/css">    
 <link href="{{ asset('vendor/font-awesome/css/font-awesome.min.css') }}" rel="stylesheet" type="text/css"/>
-<link href="{{ asset('vendor/bootstrap-datepicker/css/datepicker.css') }}" rel="stylesheet" type="text/css"/>	
+<link href="{{ asset('vendor/bootstrap-datepicker/css/datepicker.css') }}" rel="stylesheet" type="text/css"/> 
+<link href="{{ asset('vendor/spectrum/spectrum.css') }}" rel="stylesheet" type="text/css"/> 
 <link href="{{ asset('css/bootstrap-combobox.css') }}" rel="stylesheet" type="text/css"/>	
 <link href="{{ asset('css/typeahead.js-bootstrap.css') }}" rel="stylesheet" type="text/css"/>			
 <link href="{{ asset('css/style.css') }}" rel="stylesheet" type="text/css"/>    
-
+-->
 
 <style type="text/css">
 
@@ -39,26 +45,9 @@
 
 </style>
 
-<script type="text/javascript">
+@include('script')
 
-  var currencies = {{ Currency::remember(120)->get(); }};
-  var currencyMap = {};
-  for (var i=0; i<currencies.length; i++) {
-    var currency = currencies[i];
-    currencyMap[currency.id] = currency;
-  }				
-  var NINJA = NINJA || {};
-  NINJA.parseFloat = function(str) {
-    if (!str) return '';
-    str = (str+'').replace(/[^0-9\.\-]/g, '');
-    return window.parseFloat(str);
-  }
-  function formatMoney(value, currency_id, hide_symbol) {
-    value = NINJA.parseFloat(value);
-    if (!currency_id) currency_id = {{ Session::get(SESSION_CURRENCY, DEFAULT_CURRENCY); }};
-    var currency = currencyMap[currency_id];
-    return accounting.formatMoney(value, hide_symbol ? '' : currency.symbol, currency.precision, currency.thousand_separator, currency.decimal_separator);
-  }
+<script type="text/javascript">
 
   /* Set the defaults for DataTables initialisation */
   $.extend( true, $.fn.dataTable.defaults, {
@@ -89,25 +78,30 @@
         <span class="icon-bar"></span>
         <span class="icon-bar"></span>
       </button>
-      <a href="{{ Utils::isNinja() || Auth::check() ? URL::to('/') : NINJA_URL }}" class='navbar-brand'>
+      <a href="{{ URL::to('/') }}" class='navbar-brand'>
         <img src="{{ asset('images/invoiceninja-logo.png') }}" style="height:18px;width:auto"/>
       </a>	    
     </div>
 
     <div class="collapse navbar-collapse" id="navbar-collapse-1">
-      @if (Auth::check() && !isset($hideHeader))
       <ul class="nav navbar-nav" style="font-weight: bold">
         {{ HTML::nav_link('dashboard', 'dashboard') }}
         {{ HTML::menu_link('client') }}
+        @if (Utils::isPro())
+          {{ HTML::menu_link('quote') }}
+        @endif
         {{ HTML::menu_link('invoice') }}
         {{ HTML::menu_link('payment') }}
         {{ HTML::menu_link('credit') }}
-        {{-- HTML::nav_link('reports', 'Reports') --}}
       </ul>
 
       <div class="navbar-form navbar-right">
-        @if (Auth::check() && !Auth::user()->registered)
-        {{ Button::sm_success_primary(trans('texts.sign_up'), array('id' => 'signUpButton', 'data-toggle'=>'modal', 'data-target'=>'#signUpModal')) }} &nbsp;
+        @if (Auth::check())
+          @if (!Auth::user()->registered)
+            {{ Button::sm_success_primary(trans('texts.sign_up'), array('id' => 'signUpButton', 'data-toggle'=>'modal', 'data-target'=>'#signUpModal')) }} &nbsp;
+          @elseif (!Auth::user()->isPro())
+            {{ Button::sm_success_primary(trans('texts.go_pro'), array('id' => 'proPlanButton', 'data-toggle'=>'modal', 'data-target'=>'#proPlanModal')) }} &nbsp;
+          @endif
         @endif
 
         @if (Auth::user()->getPopOverText() && !Utils::isRegistered())
@@ -141,7 +135,7 @@
             <li>{{ link_to('company/products', uctrans('texts.product_library')) }}</li>
             <li>{{ link_to('company/notifications', uctrans('texts.notifications')) }}</li>
             <li>{{ link_to('company/import_export', uctrans('texts.import_export')) }}</li>
-            <li><a href="{{ url('company/custom_fields') }}">{{ uctrans('texts.custom_fields') . Utils::getProLabel(ACCOUNT_CUSTOM_FIELDS) }}</a></li>
+            <li><a href="{{ url('company/advanced_settings/custom_fields') }}">{{ uctrans('texts.advanced_settings') . Utils::getProLabel(ACCOUNT_ADVANCED_SETTINGS) }}</a></li>
 
             <li class="divider"></li>
             <li>{{ link_to('#', trans('texts.logout'), array('onclick'=>'logout()')) }}</li>
@@ -180,9 +174,6 @@
           </ul>
         </li>
       </ul>
-      @else
-        <div style="height:60px"/>
-      @endif  
       
       
     </div><!-- /.navbar-collapse -->
@@ -333,7 +324,7 @@ Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice
 
 @if (Auth::check() && !Auth::user()->isPro())
   <div class="modal fade" id="proPlanModal" tabindex="-1" role="dialog" aria-labelledby="proPlanModalLabel" aria-hidden="true">
-    <div class="modal-dialog" style="min-width:1040px">
+    <div class="modal-dialog" style="min-width:910px">
       <div class="modal-content">
         <div class="modal-header">
           <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
@@ -341,6 +332,7 @@ Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice
         </div>
 
         <div style="background-color: #fff; padding-left: 16px; padding-right: 16px" id="proPlanDiv">
+          <!--
           &nbsp;<p/>          
           <b>Go Pro to Unlock Premium Invoice Ninja Features</b><p/>          
           We believe that the free version of Invoice Ninja is a truly awesome product loaded 
@@ -349,8 +341,24 @@ Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice
           offers more versatility, power and customization options for just $50 per year.          
           <br/>&nbsp;<br/>
           <img src="{{ asset('images/pro-plan-chart.png') }}"/>
+          -->
 
-          &nbsp;
+
+          <section class="plans">
+            <div class="container">
+              <div class="row">
+                <div class="col-md-9">
+                  <h2>Go Pro to Unlock Premium Invoice Ninja Features</h2>
+                  <p>We believe that the free version of Invoice Ninja is a truly awesome product loaded 
+                    with the key features you need to bill your clients electronically. But for those who 
+                    crave still more Ninja awesomeness, we've unmasked the Invoice Ninja Pro plan, which 
+                    offers more versatility, power and customization options for just $50 per year. </p>
+                </div>
+             </div>
+            </div>              
+
+            @include('plans')
+            &nbsp;
       </div>
 
 
@@ -379,7 +387,7 @@ Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice
 @endif
 
 @if (!Utils::isNinjaProd() && !Utils::isNinjaDev())    
-<div class="container">{{ trans('texts.powered_by') }} <a href="https://www.invoiceninja.com/" target="_blank">InvoiceNinja.com</a></div>
+<div class="container">{{ trans('texts.powered_by') }} <a href="https://www.invoiceninja.com/?utm_source=powered_by" target="_blank">InvoiceNinja.com</a></div>
 @endif
 
 <p>&nbsp;</p>
@@ -464,9 +472,12 @@ Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice
       success: function(result) { 
         if (result) {
           localStorage.setItem('guest_key', '');
+          trackUrl('/signed_up');
           NINJA.isRegistered = true;
+          /*
           $('#signUpButton').hide();
           $('#myAccountButton').html(result);                            
+          */
         }            
         $('#signUpSuccessDiv, #signUpFooter').show();
         $('#working, #saveSignUpButton').hide();
@@ -497,13 +508,20 @@ Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice
     }
   }
 
+  function showSignUp() {    
+    $('#signUpModal').modal('show');    
+  }
+
   @if (Auth::check() && !Auth::user()->isPro())
-  function showProPlan() {
+  var proPlanFeature = false;
+  function showProPlan(feature) {
+    proPlanFeature = feature;
     $('#proPlanModal').modal('show');       
+    trackUrl('/view_pro_plan/' + feature);
   }
 
   function submitProPlan() {
-
+    trackUrl('/submit_pro_plan/' + proPlanFeature);
     if (NINJA.isRegistered) {
       $('#proPlanDiv, #proPlanFooter').hide();
       $('#proPlanWorking').show();
@@ -562,6 +580,7 @@ Want something changed? We're {{ link_to('https://github.com/hillelcoren/invoice
     validateSignUp();
 
     $('#signUpModal').on('shown.bs.modal', function () {
+      trackUrl('/view_sign_up');
       $(['first_name','last_name','email','password']).each(function(i, field) {
         var $input = $('form.signUpForm #new_'+field);
         if (!$input.val()) {

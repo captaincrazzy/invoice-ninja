@@ -1,6 +1,6 @@
 {{ $clientName }},
 
-{{ trans('texts.invoice_message', ['amount' => $invoiceAmount]) }}
+{{ trans("texts.{$entityType}_message", ['amount' => $invoiceAmount]) }}
 {{ $link }}
 
 @if ($emailFooter)
@@ -8,4 +8,9 @@
 @else
 {{ trans('texts.email_signature') }}
 {{ $accountName }}
+@endif
+
+@if ($showNinjaFooter)
+{{ trans('texts.ninja_email_footer', ['site' => 'Invoice Ninja']) }}
+https://www.invoiceninja.com
 @endif

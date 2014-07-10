@@ -22,6 +22,13 @@ define("ACTIVITY_TYPE_UPDATE_CREDIT", 15);
 define("ACTIVITY_TYPE_ARCHIVE_CREDIT", 16);
 define("ACTIVITY_TYPE_DELETE_CREDIT", 17);
 
+define("ACTIVITY_TYPE_CREATE_QUOTE", 18);
+define("ACTIVITY_TYPE_UPDATE_QUOTE", 19);
+define("ACTIVITY_TYPE_EMAIL_QUOTE", 20);
+define("ACTIVITY_TYPE_VIEW_QUOTE", 21);
+define("ACTIVITY_TYPE_ARCHIVE_QUOTE", 22);
+define("ACTIVITY_TYPE_DELETE_QUOTE", 23);
+
 
 class Activity extends Eloquent
 {
@@ -105,15 +112,19 @@ class Activity extends Eloquent
 			$message = Utils::encodeActivity(null, 'created', $invoice);
 		}
 
+		$adjustment = 0;
 		$client = $invoice->client;
-		$adjustment = $invoice->amount;
-		$client->balance = $client->balance + $adjustment;
-		$client->save();
+		if (!$invoice->is_quote)
+		{
+			$adjustment = $invoice->amount;
+			$client->balance = $client->balance + $adjustment;
+			$client->save();
+		}
 
 		$activity = Activity::getBlank($invoice);
 		$activity->invoice_id = $invoice->id;
 		$activity->client_id = $invoice->client_id;
-		$activity->activity_type_id = ACTIVITY_TYPE_CREATE_INVOICE;
+		$activity->activity_type_id = $invoice->is_quote ? ACTIVITY_TYPE_CREATE_QUOTE : ACTIVITY_TYPE_CREATE_INVOICE;
 		$activity->message = $message;
 		$activity->balance = $client->balance;
 		$activity->adjustment = $adjustment;
@@ -129,20 +140,12 @@ class Activity extends Eloquent
 
 		if (!$invoice->is_deleted)
 		{
-			if ($invoice->balance > 0)
-			{
-				$client = $invoice->client;
-				$client->balance = $client->balance - $invoice->balance;
-				$client->save();
-			}			
-
 			$activity = Activity::getBlank();
 			$activity->invoice_id = $invoice->id;
 			$activity->client_id = $invoice->client_id;
-			$activity->activity_type_id = ACTIVITY_TYPE_ARCHIVE_INVOICE;
+			$activity->activity_type_id = $invoice->is_quote ? ACTIVITY_TYPE_ARCHIVE_QUOTE : ACTIVITY_TYPE_ARCHIVE_INVOICE;
 			$activity->message = Utils::encodeActivity(Auth::user(), 'archived', $invoice);
 			$activity->balance = $invoice->client->balance;
-			$activity->adjustment = $invoice->balance;
 
 			$activity->save();
 		}
@@ -157,7 +160,7 @@ class Activity extends Eloquent
 		$activity->client_id = $invitation->invoice->client_id;
 		$activity->invoice_id = $invitation->invoice_id;
 		$activity->contact_id = $invitation->contact_id;
-		$activity->activity_type_id = ACTIVITY_TYPE_EMAIL_INVOICE;
+		$activity->activity_type_id = $invitation->invoice ? ACTIVITY_TYPE_EMAIL_QUOTE : ACTIVITY_TYPE_EMAIL_INVOICE;
 		$activity->message = Utils::encodeActivity(Auth::check() ? Auth::user() : null, 'emailed', $invitation->invoice, $invitation->contact);
 		$activity->balance = $client->balance;
 		$activity->save();
@@ -167,20 +170,21 @@ class Activity extends Eloquent
 	{
 		if ($invoice->is_deleted && !$invoice->getOriginal('is_deleted'))
 		{
-			if ($invoice->balance > 0)
+			if (!$invoice->is_quote)
 			{
 				$client = $invoice->client;
 				$client->balance = $client->balance - $invoice->balance;
+				$client->paid_to_date = $client->paid_to_date - ($invoice->amount - $invoice->balance);
 				$client->save();
 			}
 
 			$activity = Activity::getBlank();
 			$activity->client_id = $invoice->client_id;
 			$activity->invoice_id = $invoice->id;
-			$activity->activity_type_id = ACTIVITY_TYPE_DELETE_INVOICE;
+			$activity->activity_type_id = $invoice->is_quote ? ACTIVITY_TYPE_DELETE_QUOTE : ACTIVITY_TYPE_DELETE_INVOICE;
 			$activity->message = Utils::encodeActivity(Auth::user(), 'deleted', $invoice);
 			$activity->balance = $invoice->client->balance;
-			$activity->adjustment = $invoice->balance * -1;
+			$activity->adjustment = $invoice->is_quote ? 0 : $invoice->balance * -1;
 			$activity->save();		
 		}
 		else
@@ -201,10 +205,10 @@ class Activity extends Eloquent
 			$activity = Activity::getBlank($invoice);
 			$activity->client_id = $invoice->client_id;
 			$activity->invoice_id = $invoice->id;
-			$activity->activity_type_id = ACTIVITY_TYPE_UPDATE_INVOICE;
+			$activity->activity_type_id = $invoice->is_quote ? ACTIVITY_TYPE_UPDATE_QUOTE : ACTIVITY_TYPE_UPDATE_INVOICE;
 			$activity->message = Utils::encodeActivity(Auth::user(), 'updated', $invoice);
 			$activity->balance = $client->balance;
-			$activity->adjustment = $diff;
+			$activity->adjustment = $invoice->is_quote ? 0 : $diff;
 			$activity->json_backup = $backupInvoice->hidePrivateFields()->toJSON();
 			$activity->save();
 		}
@@ -240,7 +244,7 @@ class Activity extends Eloquent
 		$activity->invitation_id = $invitation->id;
 		$activity->contact_id = $invitation->contact_id;
 		$activity->invoice_id = $invitation->invoice_id;
-		$activity->activity_type_id = ACTIVITY_TYPE_VIEW_INVOICE;
+		$activity->activity_type_id = $invitation->invoice->is_quote ? ACTIVITY_TYPE_VIEW_QUOTE : ACTIVITY_TYPE_VIEW_INVOICE;
 		$activity->message = Utils::encodeActivity($invitation->contact, 'viewed', $invitation->invoice);
 		$activity->balance = $invitation->invoice->client->balance;
 		$activity->save();
@@ -276,6 +280,7 @@ class Activity extends Eloquent
 
 			$invoice = $payment->invoice;
 			$invoice->balance = $invoice->balance - $payment->amount;
+			$invoice->invoice_status_id = ($invoice->balance > 0) ? INVOICE_STATUS_PARTIAL : INVOICE_STATUS_PAID;
 			$invoice->save();
 		}
 
@@ -345,13 +350,7 @@ class Activity extends Eloquent
 		}
 
 		$client = $payment->client;
-		$client->balance = $client->balance + $payment->amount;
-		$client->paid_to_date = $client->paid_to_date - $payment->amount;
-		$client->save();
-
 		$invoice = $payment->invoice;
-		$invoice->balance = $invoice->balance + $payment->amount;
-		$invoice->save();
 
 		$activity = Activity::getBlank();
 		$activity->payment_id = $payment->id;
@@ -360,7 +359,7 @@ class Activity extends Eloquent
 		$activity->activity_type_id = ACTIVITY_TYPE_ARCHIVE_PAYMENT;
 		$activity->message = Utils::encodeActivity(Auth::user(), 'archived payment');
 		$activity->balance = $client->balance;
-		$activity->adjustment = $payment->amount;
+		$activity->adjustment = 0;
 		$activity->save();
 	}	
 

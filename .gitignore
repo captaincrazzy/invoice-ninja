@@ -7,10 +7,10 @@
 /public/logo
 /public/build
 /public/packages
+/public/vendor
 /bootstrap/compiled.php
 /bootstrap/environment.php
 /vendor
-/.env.development.php
 /.DS_Store
 /Thumbs.db
 /ninja.sublime-project
@@ -18,3 +18,4 @@
 /tests/_log
 .idea
 .project
+/nbproject/private/

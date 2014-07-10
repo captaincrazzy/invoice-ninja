@@ -24,7 +24,7 @@ class Utils
 
 	public static function isNinjaProd()
 	{
-		return $_SERVER['SERVER_NAME'] == 'www.invoiceninja.com';
+		return isset($_ENV['NINJA_PROD']) && $_ENV['NINJA_PROD'];		
 	}
 
 	public static function isNinjaDev()
@@ -32,11 +32,21 @@ class Utils
 		return isset($_ENV['NINJA_DEV']) && $_ENV['NINJA_DEV'];
 	}
 
+	public static function isRegistrationDisabled() 
+	{
+		return isset($_ENV['DISABLE_REGISTRATION']) && $_ENV['DISABLE_REGISTRATION'];	
+	}
+        
+	public static function isPro()
+	{
+		return Auth::check() && Auth::user()->isPro();
+	}
+
 	public static function getProLabel($feature)
 	{
 		if (Auth::check() 
 				&& !Auth::user()->isPro() 
-				&& $feature == 'custom_fields')
+				&& $feature == ACCOUNT_ADVANCED_SETTINGS)
 		{
 			return '&nbsp;<sup class="pro-label">PRO</sup>';
 		}
@@ -219,7 +229,7 @@ class Utils
 		return $date->format($format);		
 	}	
 
-	public static function toSqlDate($date)
+	public static function toSqlDate($date, $formatResult = true)
 	{
 		if (!$date)
 		{
@@ -229,10 +239,12 @@ class Utils
 		$timezone = Session::get(SESSION_TIMEZONE);
 		$format = Session::get(SESSION_DATE_FORMAT);
 
-		return DateTime::createFromFormat($format, $date, new DateTimeZone($timezone))->format('Y-m-d');
+
+		$dateTime = DateTime::createFromFormat($format, $date, new DateTimeZone($timezone));
+		return $formatResult ? $dateTime->format('Y-m-d') : $dateTime;
 	}
 	
-	public static function fromSqlDate($date)
+	public static function fromSqlDate($date, $formatResult = true)
 	{
 		if (!$date || $date == '0000-00-00')
 		{
@@ -241,8 +253,9 @@ class Utils
 		
 		$timezone = Session::get(SESSION_TIMEZONE);
 		$format = Session::get(SESSION_DATE_FORMAT);
-		
-		return DateTime::createFromFormat('Y-m-d', $date, new DateTimeZone($timezone))->format($format);
+
+		$dateTime = DateTime::createFromFormat('Y-m-d', $date, new DateTimeZone($timezone));
+		return $formatResult ? $dateTime->format($format) : $dateTime;
 	}
 
 	public static function today($formatResult = true)
@@ -278,26 +291,29 @@ class Utils
 		$object = new stdClass;
 		$object->url = $url;
 		$object->name = ucwords($type) . ': ' . $name;
-		
+	
+		$data = [];
+
 		for ($i=0; $i<count($viewed); $i++)
 		{
 			$item = $viewed[$i];
 			
-			if ($object->url == $item->url)
+			if ($object->url == $item->url || $object->name == $item->name)
 			{
-				array_splice($viewed, $i, 1);
-				break;
-			}
+				continue;				
+			}	
+
+			array_unshift($data, $item);		
 		}
 
-		array_unshift($viewed, $object);
+		array_unshift($data, $object);
 			
-		if (count($viewed) > RECENTLY_VIEWED_LIMIT)
+		if (count($data) > RECENTLY_VIEWED_LIMIT)
 		{
-			array_pop($viewed);
+			array_pop($data);
 		}
 
-		Session::put(RECENTLY_VIEWED, $viewed);
+		Session::put(RECENTLY_VIEWED, $data);
 	}
 
 	public static function processVariables($str)
@@ -429,5 +445,5 @@ class Utils
 		}
 
 		return $message;
-	}	
+	}
 }

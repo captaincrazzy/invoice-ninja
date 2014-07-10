@@ -19,6 +19,16 @@
 			@endif
 		@endforeach
 	@endif
+    
+    <!-- TODO: creditcard-types IS SET IN JS FURTHER DOWN IN THE SCRIPT PART, 
+    AND THEN IN INLINE STYLE. REMOVE THIS WHEN RAZI HAS FIXED THE IMAGES AND STYLE -->
+    <div class="two-column">
+	{{ Former::checkboxes('creditCardTypes[]')
+            ->label('Accepted Credit Cards')
+			->checkboxes($creditCardTypes)
+            ->class('creditcard-types')
+	}}
+	</div>
 	
 	<div class="two-column">
 	{{ Former::radios('recommendedGateway_id')->label('Recommended Gateways')
@@ -73,6 +83,13 @@
 		}
 	}
 
+	function gatewayLink(url) {
+		var host = new URL(url).hostname;
+		if (host) {
+			openUrl(url, '/affiliate/' + host);
+		}
+	}
+
 	$(document).ready(function() {
 		$('.recommended-gateway').change(
 			function(){
@@ -95,7 +112,14 @@
 			var contents = $(this).parent().contents();
 			contents[contents.length - 1].nodeValue = '';
 			$(this).after('<img src="' +$(this).attr('data-imageUrl') + '" /><br />');
-			$(this).parent().children().last().after('<a href="' + $(this).attr('data-siteUrl') + '">Create an account</a>');
+			$(this).parent().children().last().after('<a href="#" onclick="gatewayLink(\'' + $(this).attr('data-siteUrl') + '\')">Create an account</a>');
+		});
+        
+        // TODO: THIS IS JUST TO SHOW THE IMAGES, STYLE IS SET INLINE STYLE
+        $('.creditcard-types').each(function(){
+			var contents = $(this).parent().contents();
+			contents[contents.length - 1].nodeValue = '';
+			$(this).after('<img style="width: 60px; display: inline;" src="' +$(this).attr('data-imageUrl') + '" /><br />');
 		});
 		
 

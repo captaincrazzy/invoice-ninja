@@ -185,7 +185,7 @@ return array(
   'users' => 'Users',
   'localization' => 'Localization',
   'remove_logo' => 'Remove logo',
-  'logo_help' => 'Supported: JPEG, GIF and PNG. Recommended height: 120px',
+  'logo_help' => 'Supported: JPEG, GIF and PNG. Recommended size: 200px width by 120px height',
   'payment_gateway' => 'Payment Gateway',
   'gateway_id' => 'Provider',
   'email_notifications' => 'Email Notifications',
@@ -262,14 +262,15 @@ return array(
   'email_from' => 'The InvoiceNinja Team',
   'user_email_footer' => 'To adjust your email notification settings please visit '.SITE_URL.'/company/notifications',
   'invoice_link_message' => 'To view your client invoice click the link below:',
-  'notification_paid_subject' => 'Invoice :invoice was paid by :client',
-  'notification_sent_subject' => 'Invoice :invoice was sent to :client',
-  'notification_viewed_subject' => 'Invoice :invoice was viewed by :client',
-  'notification_paid' => 'A payment of :amount was made by client :client towards Invoice :invoice.',
-  'notification_sent' => 'The following client :client was emailed Invoice :invoice for :amount.',
-  'notification_viewed' => 'The following client :client viewed Invoice :invoice for :amount.',
+  'notification_invoice_paid_subject' => 'Invoice :invoice was paid by :client',
+  'notification_invoice_sent_subject' => 'Invoice :invoice was sent to :client',
+  'notification_invoice_viewed_subject' => 'Invoice :invoice was viewed by :client',
+  'notification_invoice_paid' => 'A payment of :amount was made by client :client towards Invoice :invoice.',
+  'notification_invoice_sent' => 'The following client :client was emailed Invoice :invoice for :amount.',
+  'notification_invoice_viewed' => 'The following client :client viewed Invoice :invoice for :amount.',  
   'reset_password' => 'You can reset your account password by clicking the following link:',
   'reset_password_footer' => 'If you did not request this password reset please email our support: ' . CONTACT_EMAIL,
+
 
   // Payment page
   'secure_payment' => 'Secure Payment',
@@ -339,7 +340,63 @@ return array(
   'archive_product' => 'Archive Product',
   'updated_product' => 'Successfully updated product',
   'created_product' => 'Successfully created product',
-  'archived_product' => 'Successfully archived product',
+  'archived_product' => 'Successfully archived product',  
+  'pro_plan_custom_fields' => ':link to enable custom fields by joining the Pro Plan',
+
+  'advanced_settings' => 'Advanced Settings',
+  'pro_plan_advanced_settings' => ':link to enable the advanced settings by joining the Pro Plan',
+  'invoice_design' => 'Invoice Design',
+  'specify_colors' => 'Specify colors',
+  'specify_colors_label' => 'Select the colors used in the invoice',
+
+  'chart_builder' => 'Chart Builder',
+  'ninja_email_footer' => 'Use :site to invoice your clients and get paid online for free!',
+  'go_pro' => 'Go Pro',
+
+  // Quotes
+  'quote' => 'Quote',
+  'quotes' => 'Quotes',
+  'quote_number' => 'Quote Number',
+  'quote_number_short' => 'Quote #',
+  'quote_date' => 'Quote Date',
+  'quote_total' => 'Quote Total',
+  'your_quote' => 'Your Quote',
+  'total' => 'Total',
+  'clone' => 'Clone',
+
+  'new_quote' => 'New Quote',
+  'create_quote' => 'Create Quote',
+  'edit_quote' => 'Edit Quote',
+  'archive_quote' => 'Archive Quote',
+  'delete_quote' => 'Delete Quote',
+  'save_quote' => 'Save Quote',
+  'email_quote' => 'Email Quote',
+  'clone_quote' => 'Clone Quote',
+  'convert_to_invoice' => 'Convert to Invoice',
+  'view_invoice' => 'View Invoice',
+  'view_client' => 'View Client',
+  'view_quote' => 'View Quote',
+
+  'updated_quote' => 'Successfully updated quote',
+  'created_quote' => 'Successfully created quote',
+  'cloned_quote' => 'Successfully cloned quote',
+  'emailed_quote' => 'Successfully emailed quote',
+  'archived_quote' => 'Successfully archived quote',
+  'archived_quotes' => 'Successfully archived :count quotes',
+  'deleted_quote' => 'Successfully deleted quote',
+  'deleted_quotes' => 'Successfully deleted :count quotes',
+  'converted_to_invoice' => 'Successfully converted quote to invoice',
+
+  'quote_subject' => 'New quote from :account',
+  'quote_message' => 'To view your quote for :amount, click the link below.',
+  'quote_link_message' => 'To view your client quote click the link below:',
+  'notification_quote_sent_subject' => 'Quote :invoice was sent to :client',
+  'notification_quote_viewed_subject' => 'Quote :invoice was viewed by :client',
+  'notification_quote_sent' => 'The following client :client was emailed Quote :invoice for :amount.',
+  'notification_quote_viewed' => 'The following client :client viewed Quote :invoice for :amount.',  
   
-  'pro_plan_custom_fields' => ':link to enable custom fields by joining the Pro Plan'
+  'session_expired' => 'Your session has expired.',
+
+
 );
+

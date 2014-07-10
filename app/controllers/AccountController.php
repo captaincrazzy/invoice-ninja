@@ -21,6 +21,11 @@ class AccountController extends \BaseController {
 
 	public function getStarted()
 	{	
+		if (Utils::isRegistrationDisabled())
+		{
+			return Redirect::away(NINJA_URL.'/invoice_now');
+		}
+
 		if (Auth::check())
 		{
 			return Redirect::to('invoices/create');	
@@ -35,7 +40,7 @@ class AccountController extends \BaseController {
 
 			if ($user && $user->registered)
 			{
-				exit;
+				return Redirect::to('/');				
 			}
 		}
 
@@ -49,8 +54,8 @@ class AccountController extends \BaseController {
 
 		Auth::login($user, true);
 		Event::fire('user.login');		
-		
-		return Redirect::to('invoices/create');		
+
+		return Redirect::to('invoices/create');
 	}
 
 	public function enableProPlan()
@@ -78,7 +83,7 @@ class AccountController extends \BaseController {
 		return Response::json($data);
 	}
 
-	public function showSection($section = ACCOUNT_DETAILS)  
+	public function showSection($section = ACCOUNT_DETAILS, $subSection = false)  
 	{
 		if ($section == ACCOUNT_DETAILS)
 		{			
@@ -86,7 +91,7 @@ class AccountController extends \BaseController {
 				'account' => Account::with('users')->findOrFail(Auth::user()->account_id),
 				'countries' => Country::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
 				'sizes' => Size::remember(DEFAULT_QUERY_CACHE)->orderBy('id')->get(),
-				'industries' => Industry::remember(DEFAULT_QUERY_CACHE)->orderBy('id')->get(),				
+				'industries' => Industry::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),				
 				'timezones' => Timezone::remember(DEFAULT_QUERY_CACHE)->orderBy('location')->get(),
 				'dateFormats' => DateFormat::remember(DEFAULT_QUERY_CACHE)->get(),
 				'datetimeFormats' => DatetimeFormat::remember(DEFAULT_QUERY_CACHE)->get(),
@@ -102,14 +107,16 @@ class AccountController extends \BaseController {
 			$accountGateway = null;
 			$config = null;
 			$configFields = null;
+            $selectedCards = 0;
 
 			if (count($account->account_gateways) > 0)
 			{
 				$accountGateway = $account->account_gateways[0];
 				$config = $accountGateway->config;
-
+                $selectedCards = $accountGateway->accepted_credit_cards;
+                
 				$configFields = json_decode($config);
-				
+                
 				foreach($configFields as $configField => $value)
 				{
 					$configFields->$configField = str_repeat('*', strlen($value));
@@ -127,10 +134,20 @@ class AccountController extends \BaseController {
 				$arrayItem = array(
 					'value' => $recommendedGateway->id,
 					'other' => 'false',
-					'data-imageUrl' => $recommendedGateway->getLogoUrl(),
+					'data-imageUrl' => asset($recommendedGateway->getLogoUrl()),
 					'data-siteUrl' => $recommendedGateway->site_url
 				);
 				$recommendedGatewayArray[$recommendedGateway->name] = $arrayItem;
+			}
+            
+            $creditCardsArray = unserialize(CREDIT_CARDS);
+            $creditCards = [];
+			foreach($creditCardsArray as $card => $name)
+			{
+                if($selectedCards > 0 && ($selectedCards & $card) == $card)
+                    $creditCards[$name['text']] = ['value' => $card, 'data-imageUrl' => asset($name['card']), 'checked' => 'checked'];
+                else
+                    $creditCards[$name['text']] = ['value' => $card, 'data-imageUrl' => asset($name['card'])];
 			}
 
 			$otherItem = array(
@@ -140,7 +157,7 @@ class AccountController extends \BaseController {
 				'data-siteUrl' => ''
 			);
 			$recommendedGatewayArray['Other Options'] = $otherItem;
-			
+            
 			$data = [
 				'account' => $account,
 				'accountGateway' => $accountGateway,
@@ -153,6 +170,7 @@ class AccountController extends \BaseController {
 					->orderBy('name')
 					->get(),
 				'recommendedGateways' => $recommendedGatewayArray,
+                'creditCardTypes' => $creditCards, 
 			];
 			
 			foreach ($data['gateways'] as $gateway)
@@ -181,13 +199,14 @@ class AccountController extends \BaseController {
 		{
 			return View::make('accounts.import_export');	
 		}	
-		else if ($section == ACCOUNT_CUSTOM_FIELDS)
+		else if ($section == ACCOUNT_ADVANCED_SETTINGS)
 		{
 			$data = [
-				'account' => Auth::user()->account
+				'account' => Auth::user()->account,
+				'feature' => $subSection
 			];
 
-			return View::make('accounts.custom_fields', $data);	
+			return View::make("accounts.{$subSection}", $data);	
 		}
 		else if ($section == ACCOUNT_PRODUCTS)
 		{
@@ -199,7 +218,7 @@ class AccountController extends \BaseController {
 		}
 	}
 
-	public function doSection($section = ACCOUNT_DETAILS)
+	public function doSection($section = ACCOUNT_DETAILS, $subSection = false)
 	{
 		if ($section == ACCOUNT_DETAILS)
 		{
@@ -225,9 +244,16 @@ class AccountController extends \BaseController {
 		{
 			return AccountController::export();
 		}		
-		else if ($section == ACCOUNT_CUSTOM_FIELDS)
+		else if ($section == ACCOUNT_ADVANCED_SETTINGS)
 		{
-			return AccountController::saveCustomFields();
+			if ($subSection == ACCOUNT_CUSTOM_FIELDS) 
+			{
+				return AccountController::saveCustomFields();
+			} 
+			else if ($subSection == ACCOUNT_INVOICE_DESIGN)
+			{
+				return AccountController::saveInvoiceDesign();
+			}
 		}
 		else if ($section == ACCOUNT_PRODUCTS)
 		{
@@ -249,18 +275,36 @@ class AccountController extends \BaseController {
 
 	private function saveCustomFields()
 	{
-		$account = Auth::user()->account;
+		if (Auth::user()->account->isPro())
+		{
+			$account = Auth::user()->account;
+			$account->custom_label1 = Input::get('custom_label1');
+			$account->custom_value1 = Input::get('custom_value1');
+			$account->custom_label2 = Input::get('custom_label2');
+			$account->custom_value2 = Input::get('custom_value2');
+			$account->custom_client_label1 = Input::get('custom_client_label1');
+			$account->custom_client_label2 = Input::get('custom_client_label2');		
+			$account->save();
 
-		$account->custom_label1 = Input::get('custom_label1');
-		$account->custom_value1 = Input::get('custom_value1');
-		$account->custom_label2 = Input::get('custom_label2');
-		$account->custom_value2 = Input::get('custom_value2');
-		$account->custom_client_label1 = Input::get('custom_client_label1');
-		$account->custom_client_label2 = Input::get('custom_client_label2');		
-		$account->save();
+			Session::flash('message', trans('texts.updated_settings'));
+		}
 
-		Session::flash('message', trans('texts.updated_settings'));
-		return Redirect::to('company/custom_fields');		
+		return Redirect::to('company/advanced_settings/custom_fields');		
+	}
+
+	private function saveInvoiceDesign()
+	{
+		if (Auth::user()->account->isPro())
+		{
+			$account = Auth::user()->account;
+			$account->primary_color = Input::get('primary_color');// ? Input::get('primary_color') : null;
+			$account->secondary_color = Input::get('secondary_color');// ? Input::get('secondary_color') : null;
+			$account->save();
+
+			Session::flash('message', trans('texts.updated_settings'));
+		}
+		
+		return Redirect::to('company/advanced_settings/invoice_design');		
 	}
 
 	private function export()
@@ -535,7 +579,7 @@ class AccountController extends \BaseController {
 	}
 
 	private function savePayments()
-	{
+	{  
 		Validator::extend('notmasked', function($attribute, $value, $parameters)
 		{
 		    return $value != str_repeat('*', strlen($value));
@@ -570,6 +614,12 @@ class AccountController extends \BaseController {
 				}				
 			}			
 		}
+        
+        $creditcards = Input::get('creditCardTypes');
+        if (count($creditcards) < 1)
+        {
+            $rules['creditCardTypes'] = 'required';
+        }
 		
 		$validator = Validator::make(Input::all(), $rules);
 
@@ -593,9 +643,16 @@ class AccountController extends \BaseController {
 				foreach ($fields as $field => $details)
 				{
 					$config->$field = trim(Input::get($gateway->id.'_'.$field));
-				}			
+				}
+                
+                $cardCount = 0;
+                foreach($creditcards as $card => $value)
+                {
+                    $cardCount += intval($value);
+                }			
 				
 				$accountGateway->config = json_encode($config);
+                $accountGateway->accepted_credit_cards = $cardCount;
 				$account->account_gateways()->save($accountGateway);
 			}
 
@@ -653,7 +710,9 @@ class AccountController extends \BaseController {
 			{
 				$path = Input::file('logo')->getRealPath();
 				File::delete('logo/' . $account->account_key . '.jpg');				
-				Image::make($path)->resize(200, 120, true, false)->save('logo/' . $account->account_key . '.jpg');				
+								
+				$image = Image::make($path)->resize(200, 120, true, false);
+				Image::canvas($image->width, $image->height, '#FFFFFF')->insert($image)->save($account->getLogoPath());
 			}
 
 			Event::fire('user.refresh');

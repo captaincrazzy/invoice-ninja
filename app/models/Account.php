@@ -203,6 +203,11 @@ class Account extends Eloquent
   		'balance_due',
   		'terms',
   		'your_invoice',
+  		'quote',
+  		'your_quote',
+  		'quote_date',
+  		'quote_number',
+  		'total'
 		];
 
 		foreach ($fields as $field)
@@ -212,10 +217,10 @@ class Account extends Eloquent
 
 		return $data;
 	}
-	
+
 	public function isPro()
 	{
-		if (Utils::isNinjaDev())
+		if (!Utils::isNinjaProd())
 		{
 			return true;
 		}

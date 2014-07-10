@@ -22,7 +22,7 @@ class ClientController extends \BaseController {
 	{
 		return View::make('list', array(
 			'entityType'=>ENTITY_CLIENT, 
-			'title' => '- Clients',
+			'title' => trans('texts.clients'),
 			'columns'=>Utils::trans(['checkbox', 'client', 'contact', 'email', 'date_created', 'last_login', 'balance', 'action'])
 		));		
 	}
@@ -82,12 +82,24 @@ class ClientController extends \BaseController {
 	{
 		$client = Client::withTrashed()->scope($publicId)->with('contacts', 'size', 'industry')->firstOrFail();
 		Utils::trackViewed($client->getDisplayName(), ENTITY_CLIENT);
-		
+	
+		$actionLinks = [
+			[trans('texts.create_invoice'), URL::to('invoices/create/' . $client->public_id )],
+     	[trans('texts.enter_payment'), URL::to('payments/create/' . $client->public_id )],
+     	[trans('texts.enter_credit'), URL::to('credits/create/' . $client->public_id )]
+    ];
+
+    if (Utils::isPro())
+    {
+    	array_unshift($actionLinks, [trans('texts.create_quote'), URL::to('quotes/create/' . $client->public_id )]);
+    }
+
 		$data = array(
+			'actionLinks' => $actionLinks,
 			'showBreadcrumbs' => false,
 			'client' => $client,
 			'credit' => $client->getTotalCredit(),
-			'title' => '- ' . $client->getDisplayName(),
+			'title' => trans('texts.view_client'),
 			'hasRecurringInvoices' => Invoice::scope()->where('is_recurring', '=', true)->whereClientId($client->id)->count() > 0
 		);
 
@@ -110,7 +122,7 @@ class ClientController extends \BaseController {
 			'client' => null, 
 			'method' => 'POST', 
 			'url' => 'clients', 
-			'title' => '- New Client'
+			'title' => trans('texts.new_client')
 		];
 
 		$data = array_merge($data, self::getViewModel());	
@@ -130,7 +142,7 @@ class ClientController extends \BaseController {
 			'client' => $client, 
 			'method' => 'PUT', 
 			'url' => 'clients/' . $publicId, 
-			'title' => '- ' . $client->name
+			'title' => trans('texts.edit_client')
 		];
 
 		$data = array_merge($data, self::getViewModel());			
@@ -142,7 +154,7 @@ class ClientController extends \BaseController {
 		return [		
 			'sizes' => Size::remember(DEFAULT_QUERY_CACHE)->orderBy('id')->get(),
 			'paymentTerms' => PaymentTerm::remember(DEFAULT_QUERY_CACHE)->orderBy('num_days')->get(['name', 'num_days']),
-			'industries' => Industry::remember(DEFAULT_QUERY_CACHE)->orderBy('id')->get(),
+			'industries' => Industry::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
 			'currencies' => Currency::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
 			'countries' => Country::remember(DEFAULT_QUERY_CACHE)->orderBy('name')->get(),
 			'customLabel1' => Auth::user()->account->custom_client_label1,
